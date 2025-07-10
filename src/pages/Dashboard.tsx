@@ -73,7 +73,7 @@ const Dashboard = () => {
       description: "Chat with our support team",
       icon: Headphones,
       color: "bg-primary/10 text-primary",
-      action: () => toast({ title: "Feature Coming Soon", description: "Live chat will be available soon" })
+      action: () => navigate('/chat')
     }
   ];
 
@@ -121,7 +121,7 @@ const Dashboard = () => {
             <p className="text-sm text-muted-foreground">Welcome, +91 {userPhone}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/admin/queries')}>
               <Settings className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
