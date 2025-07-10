@@ -50,9 +50,8 @@ const Login = () => {
 
     setIsLoading(true);
     
-    // Check environment - in dev, accept 1111, otherwise validate
-    const isDev = import.meta.env.DEV;
-    const isValidOTP = isDev ? otp === '1111' : true; // In production, this would validate against backend
+    // Validate OTP - use 1111 for all environments
+    const isValidOTP = otp === '1111';
 
     setTimeout(() => {
       setIsLoading(false);
@@ -154,11 +153,9 @@ const Login = () => {
                       </InputOTPGroup>
                     </InputOTP>
                   </div>
-                  {import.meta.env.DEV && (
-                    <p className="text-xs text-muted-foreground text-center">
-                      Development: Use OTP 1111
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground text-center">
+                    Use OTP 1111
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Button 
