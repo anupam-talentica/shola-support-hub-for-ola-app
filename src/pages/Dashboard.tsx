@@ -1,113 +1,142 @@
-import { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { ticketService } from "@/services/ticketService";
+import type { SupportTicket } from "@/types/ticket";
 import { 
+  Phone, 
+  LogOut, 
   MessageCircle, 
   FileText, 
-  MapPin, 
-  Phone, 
-  Settings, 
-  LogOut,
-  AlertCircle,
-  CheckCircle,
+  HelpCircle, 
+  Settings,
+  Zap,
   Clock,
-  Headphones
+  AlertTriangle,
+  CheckCircle,
+  Filter,
+  Ticket
 } from "lucide-react";
 
 const Dashboard = () => {
-  const [userPhone, setUserPhone] = useState('');
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userPhone, setUserPhone] = useState<string>("");
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [ticketFilter, setTicketFilter] = useState<'all' | 'open' | 'in-progress' | 'resolved'>('all');
 
   useEffect(() => {
-    const isAuth = localStorage.getItem('isAuthenticated');
+    const isLoggedIn = localStorage.getItem('isAuthenticated');
     const phone = localStorage.getItem('userPhone');
     
-    if (!isAuth) {
-      navigate('/login');
-      return;
-    }
-    
-    if (phone) {
-      setUserPhone(phone);
+    if (isLoggedIn === 'true') {
+      setIsAuthenticated(true);
+      if (phone) {
+        setUserPhone(phone);
+      }
+      // Load user's tickets
+      loadTickets();
+    } else {
+      navigate('/');
     }
   }, [navigate]);
+
+  const loadTickets = () => {
+    const allTickets = ticketService.getAllTickets();
+    setTickets(allTickets);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('userPhone');
     navigate('/');
     toast({
-      title: "Logged Out",
-      description: "You have been successfully logged out",
+      title: "Logged out successfully",
+      description: "You have been logged out."
     });
   };
 
   const quickActions = [
     {
-      title: "Report an Issue",
-      description: "Report a problem with your ride or service",
-      icon: AlertCircle,
-      color: "bg-destructive/10 text-destructive",
-      action: () => toast({ title: "Feature Coming Soon", description: "Issue reporting will be available soon" })
-    },
-    {
-      title: "Track Service Request",
-      description: "Check the status of your support tickets",
-      icon: Clock,
-      color: "bg-warning/10 text-warning",
-      action: () => toast({ title: "Feature Coming Soon", description: "Service tracking will be available soon" })
-    },
-    {
-      title: "Find Service Center",
-      description: "Locate nearest OLA service center",
-      icon: MapPin,
-      color: "bg-success/10 text-success",
-      action: () => toast({ title: "Feature Coming Soon", description: "Service center locator will be available soon" })
-    },
-    {
-      title: "Live Chat Support",
-      description: "Chat with our support team",
-      icon: Headphones,
+      title: "Start Chat Support",
+      description: "Get instant help with AI assistance",
+      icon: MessageCircle,
       color: "bg-primary/10 text-primary",
       action: () => navigate('/chat')
+    },
+    {
+      title: "View All Tickets",
+      description: "Check all your support requests",
+      icon: FileText,
+      color: "bg-blue/10 text-blue",
+      action: () => toast({ title: "All tickets", description: "View all tickets in the section below" })
+    },
+    {
+      title: "Emergency Contact",
+      description: "Get immediate assistance",
+      icon: Phone,
+      color: "bg-destructive/10 text-destructive",
+      action: () => toast({ title: "Emergency", description: "Call 1800-123-4567 for immediate help" })
+    },
+    {
+      title: "FAQ & Help",
+      description: "Find answers to common questions",
+      icon: HelpCircle,
+      color: "bg-warning/10 text-warning",
+      action: () => toast({ title: "Help", description: "Check the FAQ section below" })
     }
   ];
 
-  const recentTickets = [
-    {
-      id: "TICKET-001",
-      title: "Payment Issue",
-      status: "resolved",
-      date: "2 days ago"
-    },
-    {
-      id: "TICKET-002", 
-      title: "Ride Cancellation",
-      status: "pending",
-      date: "5 days ago"
-    },
-    {
-      id: "TICKET-003",
-      title: "App Not Working",
-      status: "in-progress",
-      date: "1 week ago"
-    }
-  ];
+  const filteredTickets = tickets.filter(ticket => {
+    if (ticketFilter === 'all') return true;
+    return ticket.status === ticketFilter;
+  });
 
-  const getStatusBadge = (status: string) => {
+  const recentTickets = filteredTickets.slice(0, 5);
+
+  const handleStatusChange = (ticketId: string, newStatus: SupportTicket['status']) => {
+    ticketService.updateTicketStatus(ticketId, newStatus);
+    loadTickets();
+    toast({
+      title: "Ticket updated",
+      description: `Status changed to ${newStatus}`
+    });
+  };
+
+  const getStatusBadge = (status: SupportTicket['status']) => {
     switch (status) {
       case 'resolved':
         return <Badge className="bg-success/10 text-success border-success/20">Resolved</Badge>;
-      case 'pending':
-        return <Badge className="bg-warning/10 text-warning border-warning/20">Pending</Badge>;
+      case 'open':
+        return <Badge className="bg-warning/10 text-warning border-warning/20">Open</Badge>;
       case 'in-progress':
         return <Badge className="bg-primary/10 text-primary border-primary/20">In Progress</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const getCategoryIcon = (category: SupportTicket['category']) => {
+    switch (category) {
+      case 'battery': return <Zap className="h-4 w-4" />;
+      case 'payment': return <FileText className="h-4 w-4" />;
+      case 'technical': return <Settings className="h-4 w-4" />;
+      case 'account': return <Settings className="h-4 w-4" />;
+      case 'rides': return <MessageCircle className="h-4 w-4" />;
+      default: return <HelpCircle className="h-4 w-4" />;
+    }
+  };
+
+  const getPriorityColor = (priority: SupportTicket['priority']) => {
+    switch (priority) {
+      case 'high': return 'text-destructive';
+      case 'medium': return 'text-warning';
+      case 'low': return 'text-muted-foreground';
+      default: return 'text-muted-foreground';
     }
   };
 
@@ -172,32 +201,110 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Recent Support Tickets */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4">Recent Support Tickets</h2>
-          <div className="space-y-3">
-            {recentTickets.map((ticket) => (
-              <Card key={ticket.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
+        {/* Support Tickets */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Ticket className="h-5 w-5" />
+              Support Tickets ({tickets.length})
+            </CardTitle>
+            <div className="flex gap-2 mt-2">
+              <Button
+                variant={ticketFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setTicketFilter('all')}
+              >
+                All
+              </Button>
+              <Button
+                variant={ticketFilter === 'open' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setTicketFilter('open')}
+              >
+                Open
+              </Button>
+              <Button
+                variant={ticketFilter === 'in-progress' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setTicketFilter('in-progress')}
+              >
+                In Progress
+              </Button>
+              <Button
+                variant={ticketFilter === 'resolved' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setTicketFilter('resolved')}
+              >
+                Resolved
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {recentTickets.map((ticket) => (
+                <div key={ticket.id} className="border rounded-lg p-4 space-y-3">
+                  <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-medium">{ticket.title}</h3>
-                        {getStatusBadge(ticket.status)}
+                        {getCategoryIcon(ticket.category)}
+                        <p className="font-medium">{ticket.title}</p>
+                        <span className={`text-xs px-2 py-1 rounded ${getPriorityColor(ticket.priority)}`}>
+                          {ticket.priority.toUpperCase()}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <FileText className="h-3 w-3" />
-                        <span>{ticket.id}</span>
-                        <span>•</span>
-                        <span>{ticket.date}</span>
+                      <p className="text-sm text-muted-foreground mb-2">{ticket.description}</p>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>ID: {ticket.id}</span>
+                        <span>Category: {ticket.category}</span>
+                        <span>{ticket.createdAt.toLocaleDateString()}</span>
                       </div>
                     </div>
+                    <div className="text-right space-y-2">
+                      {getStatusBadge(ticket.status)}
+                      {ticket.status !== 'resolved' && (
+                        <div className="flex gap-1">
+                          {ticket.status === 'open' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleStatusChange(ticket.id, 'in-progress')}
+                            >
+                              Start
+                            </Button>
+                          )}
+                          {ticket.status === 'in-progress' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleStatusChange(ticket.id, 'resolved')}
+                            >
+                              Resolve
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
+                </div>
+              ))}
+              {recentTickets.length === 0 && (
+                <div className="text-center py-8">
+                  <Ticket className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-muted-foreground">
+                    {ticketFilter === 'all' ? 'No support tickets yet' : `No ${ticketFilter} tickets`}
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    className="mt-2"
+                    onClick={() => navigate('/chat')}
+                  >
+                    Start a conversation to create tickets
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* FAQ Quick Links */}
         <Card>
@@ -206,28 +313,25 @@ const Dashboard = () => {
               <MessageCircle className="h-5 w-5" />
               Frequently Asked Questions
             </CardTitle>
-            <CardDescription>
-              Quick answers to common questions
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-2">
-              <Button variant="ghost" className="w-full justify-start h-auto p-3" onClick={() => toast({ title: "FAQ", description: "How to cancel a ride: Go to your ride history and select cancel" })}>
+              <Button variant="ghost" className="w-full justify-start h-auto p-3" onClick={() => toast({ title: "FAQ", description: "To start a ride, scan the QR code on the scooter and follow app instructions." })}>
                 <div className="text-left">
-                  <p className="font-medium">How to cancel a ride?</p>
-                  <p className="text-sm text-muted-foreground">Learn about ride cancellation policy</p>
+                  <p className="font-medium">How to start a ride?</p>
+                  <p className="text-sm text-muted-foreground">Learn about starting your electric scooter ride</p>
                 </div>
               </Button>
-              <Button variant="ghost" className="w-full justify-start h-auto p-3" onClick={() => toast({ title: "FAQ", description: "Refunds are processed within 3-5 business days" })}>
+              <Button variant="ghost" className="w-full justify-start h-auto p-3" onClick={() => toast({ title: "FAQ", description: "Battery range is typically 15-25 km per charge depending on terrain and rider weight." })}>
                 <div className="text-left">
-                  <p className="font-medium">When will I get my refund?</p>
-                  <p className="text-sm text-muted-foreground">Check refund processing times</p>
+                  <p className="font-medium">What's the battery range?</p>
+                  <p className="text-sm text-muted-foreground">Check battery performance and range</p>
                 </div>
               </Button>
-              <Button variant="ghost" className="w-full justify-start h-auto p-3" onClick={() => toast({ title: "FAQ", description: "Update your profile in the app settings" })}>
+              <Button variant="ghost" className="w-full justify-start h-auto p-3" onClick={() => toast({ title: "FAQ", description: "Payment is processed automatically after each ride. You can add money to wallet or link cards." })}>
                 <div className="text-left">
-                  <p className="font-medium">How to update my profile?</p>
-                  <p className="text-sm text-muted-foreground">Manage your account information</p>
+                  <p className="font-medium">How does payment work?</p>
+                  <p className="text-sm text-muted-foreground">Understand payment processing</p>
                 </div>
               </Button>
             </div>

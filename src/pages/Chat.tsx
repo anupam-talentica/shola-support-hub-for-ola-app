@@ -1,25 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { Bot, User, ArrowLeft, Settings, Paperclip, Send, FileText, ThumbsUp, ThumbsDown, Ticket, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { openAIService } from "@/services/openai";
-import { 
-  ArrowLeft, 
-  Send, 
-  Paperclip, 
-  Bot, 
-  User, 
-  ThumbsUp, 
-  ThumbsDown,
-  FileText,
-  X,
-  Settings,
-  Loader2
-} from "lucide-react";
+import { ticketService } from "@/services/ticketService";
+import type { SupportTicket } from "@/types/ticket";
 
 // Electric Scooter Knowledge Base
 const scooterKnowledge = {
@@ -100,8 +90,16 @@ interface UnresolvedQuery {
   timestamp: Date;
 }
 
+interface TicketFormData {
+  title: string;
+  description: string;
+  category: SupportTicket['category'];
+  priority: SupportTicket['priority'];
+}
+
 const Chat = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -112,6 +110,13 @@ const Chat = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [isAIEnabled, setIsAIEnabled] = useState(false);
+  const [showTicketForm, setShowTicketForm] = useState<string | null>(null);
+  const [ticketFormData, setTicketFormData] = useState<TicketFormData>({
+    title: '',
+    description: '',
+    category: 'other',
+    priority: 'medium'
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -133,6 +138,9 @@ const Chat = () => {
       setIsAIEnabled(true);
       openAIService.setApiKey(savedApiKey);
     }
+
+    // Migrate old unresolvedQueries to new ticket system
+    ticketService.migrateFromUnresolvedQueries();
 
     // Add welcome message if no history
     if (!savedMessages) {
@@ -157,6 +165,66 @@ const Chat = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const handleCreateTicket = (messageId: string) => {
+    const message = messages.find(m => m.id === messageId);
+    if (message) {
+      setTicketFormData({
+        title: message.text.substring(0, 50) + '...',
+        description: message.text,
+        category: ticketService.categorizeFromMessage(message.text),
+        priority: ticketService.determinePriority(message.text)
+      });
+      setShowTicketForm(messageId);
+    }
+  };
+
+  const handleSubmitTicket = () => {
+    if (!ticketFormData.title.trim() || !ticketFormData.description.trim()) {
+      toast({
+        title: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const messageForTicket = messages.find(m => m.id === showTicketForm);
+    const userPhone = localStorage.getItem('userPhone');
+    
+    const ticket = ticketService.createTicket({
+      title: ticketFormData.title,
+      description: ticketFormData.description,
+      category: ticketFormData.category,
+      priority: ticketFormData.priority,
+      userEmail: userEmail || 'anonymous@user.com',
+      userPhone: userPhone || undefined,
+      originalMessage: messageForTicket?.text
+    });
+
+    // Add ticket reference to chat
+    const ticketMessage: Message = {
+      id: Date.now().toString(),
+      text: `✅ Support ticket created successfully!\n\nTicket ID: ${ticket.id}\nStatus: Open\n\nYou can track your ticket progress in the Dashboard.`,
+      sender: 'bot',
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, ticketMessage]);
+
+    toast({
+      title: "Ticket created successfully!",
+      description: `Ticket ID: ${ticket.id}. Track progress in Dashboard.`
+    });
+
+    setShowTicketForm(null);
+    setTicketFormData({
+      title: '',
+      description: '',
+      category: 'other',
+      priority: 'medium'
+    });
+    setUserEmail("");
+  };
 
   // Smart pattern matching function
   const findBestResponse = (userMessage: string): string => {
@@ -431,6 +499,14 @@ const Chat = () => {
                       >
                         <ThumbsDown className={`h-3 w-3 ${message.rating === 'down' ? 'fill-current text-destructive' : ''}`} />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => handleCreateTicket(message.id)}
+                      >
+                        <Ticket className="h-3 w-3" />
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -596,6 +672,88 @@ const Chat = () => {
                   Submit Query
                 </Button>
                 <Button variant="outline" onClick={() => setShowFeedbackForm(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Support Ticket Form Modal */}
+      {showTicketForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Ticket className="h-5 w-5" />
+                Create Support Ticket
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Title *</label>
+                <Input
+                  placeholder="Brief description of your issue"
+                  value={ticketFormData.title}
+                  onChange={(e) => setTicketFormData(prev => ({ ...prev, title: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Description *</label>
+                <Textarea
+                  placeholder="Detailed description of your issue..."
+                  value={ticketFormData.description}
+                  onChange={(e) => setTicketFormData(prev => ({ ...prev, description: e.target.value }))}
+                  className="mt-1"
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Category</label>
+                  <select
+                    value={ticketFormData.category}
+                    onChange={(e) => setTicketFormData(prev => ({ ...prev, category: e.target.value as SupportTicket['category'] }))}
+                    className="w-full mt-1 px-3 py-2 border rounded-md text-sm"
+                  >
+                    <option value="battery">Battery</option>
+                    <option value="payment">Payment</option>
+                    <option value="technical">Technical</option>
+                    <option value="account">Account</option>
+                    <option value="rides">Rides</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Priority</label>
+                  <select
+                    value={ticketFormData.priority}
+                    onChange={(e) => setTicketFormData(prev => ({ ...prev, priority: e.target.value as SupportTicket['priority'] }))}
+                    className="w-full mt-1 px-3 py-2 border rounded-md text-sm"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Your email for updates:</label>
+                <Input
+                  placeholder="your-email@example.com"
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  className="mt-1"
+                  type="email"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleSubmitTicket} className="flex-1">
+                  Create Ticket
+                </Button>
+                <Button variant="outline" onClick={() => setShowTicketForm(null)}>
                   Cancel
                 </Button>
               </div>
