@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { openAIService } from "@/services/openai";
 import { 
   ArrowLeft, 
   Send, 
@@ -15,7 +16,9 @@ import {
   ThumbsUp, 
   ThumbsDown,
   FileText,
-  X
+  X,
+  Settings,
+  Loader2
 } from "lucide-react";
 
 // Electric Scooter Knowledge Base
@@ -106,10 +109,13 @@ const Chat = () => {
   const [showFeedbackForm, setShowFeedbackForm] = useState<string | null>(null);
   const [feedbackText, setFeedbackText] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [isAIEnabled, setIsAIEnabled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load chat history from localStorage
+  // Load chat history and API key from localStorage
   useEffect(() => {
     const savedMessages = localStorage.getItem('chatHistory');
     if (savedMessages) {
@@ -120,11 +126,19 @@ const Chat = () => {
       })));
     }
 
+    // Check for saved API key
+    const savedApiKey = localStorage.getItem('openai_api_key');
+    if (savedApiKey) {
+      setApiKey(savedApiKey);
+      setIsAIEnabled(true);
+      openAIService.setApiKey(savedApiKey);
+    }
+
     // Add welcome message if no history
     if (!savedMessages) {
       const welcomeMessage: Message = {
         id: Date.now().toString(),
-        text: "Hello! I'm your Electric Scooter Support Assistant. I can help you with battery issues, ride problems, payments, maintenance, safety guidelines, and account management. How can I assist you today?",
+        text: `Hello! I'm your Electric Scooter Support Assistant${savedApiKey ? ' powered by AI' : ''}. I can help you with battery issues, ride problems, payments, maintenance, safety guidelines, and account management. How can I assist you today?`,
         sender: 'bot',
         timestamp: new Date()
       };
@@ -205,9 +219,27 @@ const Chat = () => {
     setSelectedFile(null);
     setIsTyping(true);
 
-    // Simulate typing delay
-    setTimeout(() => {
-      const botResponse = findBestResponse(userMessage.text);
+    try {
+      let botResponse: string;
+      
+      if (isAIEnabled) {
+        // Try OpenAI first
+        try {
+          botResponse = await openAIService.getResponse(userMessage.text);
+        } catch (error) {
+          console.error('OpenAI error, falling back to pattern matching:', error);
+          botResponse = findBestResponse(userMessage.text);
+          toast({
+            title: "AI temporarily unavailable",
+            description: "Switched to basic responses. Check your API key.",
+            variant: "destructive"
+          });
+        }
+      } else {
+        // Use pattern matching
+        botResponse = findBestResponse(userMessage.text);
+      }
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: botResponse,
@@ -216,8 +248,51 @@ const Chat = () => {
       };
       
       setMessages(prev => [...prev, botMessage]);
+    } catch (error) {
+      console.error('Error generating response:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm sorry, I encountered an error. Please try again.",
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
+  };
+
+  const handleSaveApiKey = () => {
+    if (!apiKey.trim()) {
+      toast({
+        title: "API Key Required",
+        description: "Please enter your OpenAI API key",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    localStorage.setItem('openai_api_key', apiKey);
+    openAIService.setApiKey(apiKey);
+    setIsAIEnabled(true);
+    setShowSettings(false);
+    
+    toast({
+      title: "API Key Saved",
+      description: "AI responses are now enabled!",
+    });
+  };
+
+  const handleDisableAI = () => {
+    localStorage.removeItem('openai_api_key');
+    setApiKey("");
+    setIsAIEnabled(false);
+    setShowSettings(false);
+    
+    toast({
+      title: "AI Disabled",
+      description: "Switched to basic pattern matching responses",
+    });
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,15 +366,20 @@ const Chat = () => {
         <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-1">
           <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
             <Bot className="h-4 w-4 text-primary-foreground" />
           </div>
           <div>
             <h1 className="font-semibold">Electric Scooter Support</h1>
-            <p className="text-sm text-muted-foreground">AI Assistant</p>
+            <p className="text-sm text-muted-foreground">
+              {isAIEnabled ? `AI Assistant (${openAIService.getUsageCount()} queries)` : 'Basic Assistant'}
+            </p>
           </div>
         </div>
+        <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)}>
+          <Settings className="h-4 w-4" />
+        </Button>
         <Badge variant="outline" className="ml-auto">Online</Badge>
       </div>
 
@@ -424,6 +504,64 @@ const Chat = () => {
           accept="image/*,.pdf,.doc,.docx,.txt"
         />
       </div>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>AI Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!isAIEnabled ? (
+                <>
+                  <div>
+                    <label className="text-sm font-medium">OpenAI API Key:</label>
+                    <Input
+                      type="password"
+                      placeholder="sk-..."
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Your API key is stored locally and never shared. Get yours from openai.com
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={handleSaveApiKey} className="flex-1">
+                      Enable AI
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowSettings(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <p className="text-sm">✅ AI is enabled</p>
+                    <p className="text-xs text-muted-foreground">
+                      Queries used: {openAIService.getUsageCount()}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Estimated cost: ~${(openAIService.getUsageCount() * 0.0001).toFixed(4)}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="destructive" onClick={handleDisableAI} className="flex-1">
+                      Disable AI
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowSettings(false)}>
+                      Close
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Feedback Form Modal */}
       {showFeedbackForm && (
