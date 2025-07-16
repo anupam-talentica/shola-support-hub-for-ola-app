@@ -101,19 +101,19 @@ class OpenAIService {
 
     try {
       const completion = await this.client.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4.1-2025-04-14',
         messages: [
           {
             role: 'system',
-            content: 'You are an electric scooter support assistant. Answer only electric scooter related questions concisely and helpfully. For unrelated questions, politely decline.'
+            content: 'You are an expert electric scooter support assistant with comprehensive knowledge of all major brands (OLA, Ather, TVS, Bajuj, etc.). Provide accurate, detailed, and helpful responses about battery management, maintenance schedules, troubleshooting, safety, payments, and account issues. Be concise but thorough. For non-scooter questions, politely decline and redirect to scooter-related topics.'
           },
           {
             role: 'user',
             content: userQuery
           }
         ],
-        max_tokens: 150,
-        temperature: 0.7
+        max_tokens: 300,
+        temperature: 0.6
       });
 
       const response = completion.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response. Please try again.";
