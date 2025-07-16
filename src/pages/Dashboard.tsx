@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ticketService } from "@/services/ticketService";
+import { userService } from "@/services/userService";
 import type { SupportTicket } from "@/types/ticket";
 import { 
   Phone, 
@@ -28,17 +29,16 @@ const Dashboard = () => {
   const [userPhone, setUserPhone] = useState<string>("");
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [ticketFilter, setTicketFilter] = useState<'all' | 'open' | 'in-progress' | 'resolved'>('all');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const isLoggedIn = localStorage.getItem('isAuthenticated');
-    const phone = localStorage.getItem('userPhone');
+    const user = userService.getCurrentUser();
     
-    if (isLoggedIn === 'true') {
+    if (user) {
       setIsAuthenticated(true);
-      if (phone) {
-        setUserPhone(phone);
-      }
-      // Load user's tickets
+      setUserPhone(user.phone);
+      setIsAdmin(user.role === 'admin');
+      // Load tickets based on user role
       loadTickets();
     } else {
       navigate('/');
@@ -46,8 +46,11 @@ const Dashboard = () => {
   }, [navigate]);
 
   const loadTickets = () => {
-    const allTickets = ticketService.getAllTickets();
-    setTickets(allTickets);
+    const user = userService.getCurrentUser();
+    if (user) {
+      const userTickets = ticketService.getTicketsForUser(user.phone, user.role === 'admin');
+      setTickets(userTickets);
+    }
   };
 
   const handleLogout = () => {
@@ -147,7 +150,12 @@ const Dashboard = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-foreground">SHOLA</h1>
-            <p className="text-sm text-muted-foreground">Welcome, +91 {userPhone}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-muted-foreground">Welcome, +91 {userPhone}</p>
+              {isAdmin && (
+                <Badge variant="destructive" className="text-xs">Admin</Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => navigate('/admin/queries')}>
@@ -206,7 +214,7 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Ticket className="h-5 w-5" />
-              Support Tickets ({tickets.length})
+              {isAdmin ? `All Support Tickets (${tickets.length})` : `My Support Tickets (${tickets.length})`}
             </CardTitle>
             <div className="flex gap-2 mt-2">
               <Button
@@ -256,12 +264,15 @@ const Dashboard = () => {
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         <span>ID: {ticket.id}</span>
                         <span>Category: {ticket.category}</span>
+                        {isAdmin && ticket.userPhone && (
+                          <span>User: +91 {ticket.userPhone}</span>
+                        )}
                         <span>{ticket.createdAt.toLocaleDateString()}</span>
                       </div>
                     </div>
                     <div className="text-right space-y-2">
                       {getStatusBadge(ticket.status)}
-                      {ticket.status !== 'resolved' && (
+                      {isAdmin && ticket.status !== 'resolved' && (
                         <div className="flex gap-1">
                           {ticket.status === 'open' && (
                             <Button

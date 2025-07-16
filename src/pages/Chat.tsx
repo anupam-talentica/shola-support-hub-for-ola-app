@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { openAIService } from "@/services/openai";
 import { ticketService } from "@/services/ticketService";
+import { userService } from "@/services/userService";
 import type { SupportTicket } from "@/types/ticket";
 
 // Electric Scooter Knowledge Base
@@ -189,15 +190,24 @@ const Chat = () => {
     }
 
     const messageForTicket = messages.find(m => m.id === showTicketForm);
-    const userPhone = localStorage.getItem('userPhone');
+    const user = userService.getCurrentUser();
+    
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to create a ticket",
+        variant: "destructive"
+      });
+      return;
+    }
     
     const ticket = ticketService.createTicket({
       title: ticketFormData.title,
       description: ticketFormData.description,
       category: ticketFormData.category,
       priority: ticketFormData.priority,
-      userEmail: userEmail || 'anonymous@user.com',
-      userPhone: userPhone || undefined,
+      userEmail: userEmail || `${user.phone}@user.com`,
+      userPhone: user.phone,
       originalMessage: messageForTicket?.text
     });
 

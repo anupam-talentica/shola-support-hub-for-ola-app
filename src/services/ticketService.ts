@@ -87,6 +87,25 @@ class TicketService {
     return this.getAllTickets().find(ticket => ticket.id === id);
   }
 
+  /**
+   * Get tickets for a specific user (by phone number)
+   */
+  getUserTickets(userPhone: string): SupportTicket[] {
+    const allTickets = this.getAllTickets();
+    return allTickets.filter(ticket => ticket.userPhone === userPhone);
+  }
+
+  /**
+   * Get tickets based on user role context
+   */
+  getTicketsForUser(userPhone: string, isAdmin: boolean): SupportTicket[] {
+    if (isAdmin) {
+      return this.getAllTickets(); // Admins see all tickets
+    } else {
+      return this.getUserTickets(userPhone); // Customers see only their tickets
+    }
+  }
+
   updateTicketStatus(id: string, status: SupportTicket['status']): void {
     const tickets = this.getAllTickets();
     const ticketIndex = tickets.findIndex(ticket => ticket.id === id);
