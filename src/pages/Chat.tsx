@@ -304,6 +304,11 @@ const Chat = () => {
   const handleSendMessage = async () => {
     if (!inputText.trim() && !selectedFile) return;
 
+    console.log('=== CHAT DEBUG ===');
+    console.log('Input text:', inputText.trim());
+    console.log('isAIEnabled:', isAIEnabled);
+    console.log('isPerplexityEnabled:', isPerplexityEnabled);
+
     const userMessage: Message = {
       id: Date.now().toString(),
       text: inputText.trim(),
@@ -321,31 +326,40 @@ const Chat = () => {
     setSelectedFile(null);
     setIsTyping(true);
 
+    console.log('User message added, starting response generation...');
+
     try {
       let botResponse: string;
       let sources: string[] | undefined;
       let isWebSearch = false;
       
+      console.log('Starting response logic...');
+      
       // Check if query needs web search
       if (isPerplexityEnabled && perplexityService.needsWebSearch(userMessage.text)) {
+        console.log('Using Perplexity web search...');
         setIsSearching(true);
         try {
           const webResult = await perplexityService.searchWeb(userMessage.text);
           botResponse = webResult.response;
           sources = webResult.sources;
           isWebSearch = true;
+          console.log('Perplexity response received:', botResponse.substring(0, 100) + '...');
         } catch (error) {
           console.error('Perplexity error, falling back to OpenAI:', error);
           // Fallback to OpenAI or pattern matching
           if (isAIEnabled) {
             try {
               botResponse = await openAIService.getResponse(userMessage.text);
+              console.log('OpenAI fallback response:', botResponse.substring(0, 100) + '...');
             } catch (aiError) {
               console.error('OpenAI also failed:', aiError);
               botResponse = findBestResponse(userMessage.text);
+              console.log('Pattern matching fallback response:', botResponse.substring(0, 100) + '...');
             }
           } else {
             botResponse = findBestResponse(userMessage.text);
+            console.log('Pattern matching response (no AI):', botResponse.substring(0, 100) + '...');
           }
           toast({
             title: "Web search unavailable",
@@ -356,12 +370,15 @@ const Chat = () => {
           setIsSearching(false);
         }
       } else if (isAIEnabled) {
+        console.log('Using OpenAI...');
         // Use OpenAI for general queries
         try {
           botResponse = await openAIService.getResponse(userMessage.text);
+          console.log('OpenAI response:', botResponse.substring(0, 100) + '...');
         } catch (error) {
           console.error('OpenAI error, falling back to pattern matching:', error);
           botResponse = findBestResponse(userMessage.text);
+          console.log('Pattern matching fallback:', botResponse.substring(0, 100) + '...');
           toast({
             title: "AI temporarily unavailable",
             description: "Switched to basic responses. Check your API key.",
@@ -369,10 +386,13 @@ const Chat = () => {
           });
         }
       } else {
+        console.log('Using pattern matching (no AI services enabled)...');
         // Use pattern matching
         botResponse = findBestResponse(userMessage.text);
+        console.log('Pattern matching response:', botResponse.substring(0, 100) + '...');
       }
 
+      console.log('Creating bot message...');
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: botResponse,
@@ -382,7 +402,9 @@ const Chat = () => {
         isWebSearch
       };
       
+      console.log('Adding bot message to state...');
       setMessages(prev => [...prev, botMessage]);
+      console.log('Bot message added successfully');
     } catch (error) {
       console.error('Error generating response:', error);
       const errorMessage: Message = {
