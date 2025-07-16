@@ -271,7 +271,7 @@ const Chat = () => {
     setUserEmail("");
   };
 
-  // Smart pattern matching function
+  // Smart pattern matching function with brand detection
   const findBestResponse = (userMessage: string): string => {
     const lowerMessage = userMessage.toLowerCase();
     
@@ -289,6 +289,22 @@ const Chat = () => {
       return "Sorry, I can only help with electric scooter related questions. Please ask me about battery, rides, payments, maintenance, safety, or account issues.";
     }
 
+    // Brand detection - check for specific brand mentions
+    const brands = {
+      'ola': ['ola', 'ola electric'],
+      'ather': ['ather'],
+      'tvs': ['tvs'],
+      'bajaj': ['bajaj']
+    };
+    
+    let detectedBrand = '';
+    for (const [brand, keywords] of Object.entries(brands)) {
+      if (keywords.some(keyword => lowerMessage.includes(keyword))) {
+        detectedBrand = brand;
+        break;
+      }
+    }
+
     // Find matching category and response
     let bestMatch = { category: '', score: 0, responses: [] as string[] };
     
@@ -304,7 +320,16 @@ const Chat = () => {
     });
 
     if (bestMatch.score > 0) {
-      // Return random response from the best matching category
+      // If a specific brand is detected, filter responses by that brand
+      if (detectedBrand) {
+        const brandResponses = bestMatch.responses.filter(response => 
+          response.toLowerCase().includes(detectedBrand)
+        );
+        if (brandResponses.length > 0) {
+          return brandResponses[Math.floor(Math.random() * brandResponses.length)];
+        }
+      }
+      // For general queries or if no brand-specific response found, use random selection
       return bestMatch.responses[Math.floor(Math.random() * bestMatch.responses.length)];
     }
 
