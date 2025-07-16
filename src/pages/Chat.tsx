@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bot, User, ArrowLeft, Settings, Paperclip, Send, FileText, ThumbsUp, ThumbsDown, Ticket, X, Loader2 } from "lucide-react";
+import { Bot, User, ArrowLeft, Settings, Paperclip, Send, FileText, ThumbsUp, ThumbsDown, Ticket, X, Loader2, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { openAIService } from '../services/openai';
+import { perplexityService } from '../services/perplexityService';
 import { ticketService } from '../services/ticketService';
 import { userService } from '../services/userService';
 import type { SupportTicket } from '../types/ticket';
@@ -81,6 +82,8 @@ interface Message {
     type: string;
   };
   rating?: 'up' | 'down';
+  sources?: string[];
+  isWebSearch?: boolean;
 }
 
 interface UnresolvedQuery {
@@ -110,7 +113,10 @@ const Chat = () => {
   const [userEmail, setUserEmail] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState("");
+  const [perplexityApiKey, setPerplexityApiKey] = useState("");
   const [isAIEnabled, setIsAIEnabled] = useState(false);
+  const [isPerplexityEnabled, setIsPerplexityEnabled] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [showTicketForm, setShowTicketForm] = useState<string | null>(null);
   const [ticketFormData, setTicketFormData] = useState<TicketFormData>({
     title: '',
@@ -139,12 +145,19 @@ const Chat = () => {
       })));
     }
 
-    // Check for saved API key
+    // Check for saved API keys
     const savedApiKey = localStorage.getItem('openai_api_key');
     if (savedApiKey) {
       setApiKey(savedApiKey);
       setIsAIEnabled(true);
       openAIService.setApiKey(savedApiKey);
+    }
+
+    const savedPerplexityKey = localStorage.getItem('perplexity_api_key');
+    if (savedPerplexityKey) {
+      setPerplexityApiKey(savedPerplexityKey);
+      setIsPerplexityEnabled(true);
+      perplexityService.setApiKey(savedPerplexityKey);
     }
 
     // Migrate old unresolvedQueries to new ticket system
@@ -310,9 +323,40 @@ const Chat = () => {
 
     try {
       let botResponse: string;
+      let sources: string[] | undefined;
+      let isWebSearch = false;
       
-      if (isAIEnabled) {
-        // Try OpenAI first
+      // Check if query needs web search
+      if (isPerplexityEnabled && perplexityService.needsWebSearch(userMessage.text)) {
+        setIsSearching(true);
+        try {
+          const webResult = await perplexityService.searchWeb(userMessage.text);
+          botResponse = webResult.response;
+          sources = webResult.sources;
+          isWebSearch = true;
+        } catch (error) {
+          console.error('Perplexity error, falling back to OpenAI:', error);
+          // Fallback to OpenAI or pattern matching
+          if (isAIEnabled) {
+            try {
+              botResponse = await openAIService.getResponse(userMessage.text);
+            } catch (aiError) {
+              console.error('OpenAI also failed:', aiError);
+              botResponse = findBestResponse(userMessage.text);
+            }
+          } else {
+            botResponse = findBestResponse(userMessage.text);
+          }
+          toast({
+            title: "Web search unavailable",
+            description: "Using cached responses. Check your Perplexity API key.",
+            variant: "destructive"
+          });
+        } finally {
+          setIsSearching(false);
+        }
+      } else if (isAIEnabled) {
+        // Use OpenAI for general queries
         try {
           botResponse = await openAIService.getResponse(userMessage.text);
         } catch (error) {
@@ -333,7 +377,9 @@ const Chat = () => {
         id: (Date.now() + 1).toString(),
         text: botResponse,
         sender: 'bot',
-        timestamp: new Date()
+        timestamp: new Date(),
+        sources,
+        isWebSearch
       };
       
       setMessages(prev => [...prev, botMessage]);
@@ -348,6 +394,7 @@ const Chat = () => {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);
+      setIsSearching(false);
     }
   };
 
@@ -381,6 +428,37 @@ const Chat = () => {
     toast({
       title: "AI Disabled",
       description: "Switched to basic pattern matching responses",
+    });
+  };
+
+  const handleSavePerplexityKey = () => {
+    if (!perplexityApiKey.trim()) {
+      toast({
+        title: "API Key Required",
+        description: "Please enter your Perplexity API key",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    localStorage.setItem('perplexity_api_key', perplexityApiKey);
+    perplexityService.setApiKey(perplexityApiKey);
+    setIsPerplexityEnabled(true);
+    
+    toast({
+      title: "Perplexity API Key Saved",
+      description: "Web search is now enabled for real-time information!",
+    });
+  };
+
+  const handleDisablePerplexity = () => {
+    localStorage.removeItem('perplexity_api_key');
+    setPerplexityApiKey("");
+    setIsPerplexityEnabled(false);
+    
+    toast({
+      title: "Web Search Disabled",
+      description: "Switched to cached responses only",
     });
   };
 
@@ -499,10 +577,30 @@ const Chat = () => {
                       <p className="text-muted-foreground">{message.file.size}</p>
                     </div>
                   </div>
-                )}
-                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                  <span>{message.timestamp.toLocaleTimeString()}</span>
-                  {message.sender === 'bot' && (
+                 )}
+                 {message.sources && message.sources.length > 0 && (
+                   <div className="mt-2 p-2 bg-muted/50 rounded text-xs">
+                     <p className="font-medium mb-1 flex items-center gap-1">
+                       <Globe className="h-3 w-3" />
+                       Sources:
+                     </p>
+                     {message.sources.slice(0, 3).map((source, index) => (
+                       <a 
+                         key={index} 
+                         href={source} 
+                         target="_blank" 
+                         rel="noopener noreferrer"
+                         className="block text-primary hover:underline truncate"
+                       >
+                         {source.replace(/^https?:\/\//, '')}
+                       </a>
+                     ))}
+                   </div>
+                 )}
+                 <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                   <span>{message.timestamp.toLocaleTimeString()}</span>
+                   {message.isWebSearch && <Badge variant="secondary" className="text-xs">Live Search</Badge>}
+                   {message.sender === 'bot' && (
                     <div className="flex gap-1 ml-2">
                       <Button
                         variant="ghost"
@@ -536,16 +634,19 @@ const Chat = () => {
           </div>
         ))}
         
-        {isTyping && (
+        {(isTyping || isSearching) && (
           <div className="flex gap-3">
             <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center">
-              <Bot className="h-4 w-4 text-secondary-foreground" />
+              {isSearching ? <Globe className="h-4 w-4 text-secondary-foreground" /> : <Bot className="h-4 w-4 text-secondary-foreground" />}
             </div>
             <div className="bg-card border rounded-lg px-4 py-2">
-              <div className="flex gap-1">
-                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                </div>
+                {isSearching && <span className="text-xs text-muted-foreground">Searching the web...</span>}
               </div>
             </div>
           </div>
@@ -605,56 +706,102 @@ const Chat = () => {
       {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md">
+          <Card className="w-full max-w-lg">
             <CardHeader>
-              <CardTitle>AI Settings</CardTitle>
+              <CardTitle>AI & Web Search Settings</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {!isAIEnabled ? (
-                <>
-                  <div>
-                    <label className="text-sm font-medium">OpenAI API Key:</label>
-                    <Input
-                      type="password"
-                      placeholder="sk-..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      className="mt-1"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Your API key is stored locally and never shared. Get yours from openai.com
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={handleSaveApiKey} className="flex-1">
+            <CardContent className="space-y-6">
+              {/* OpenAI Settings */}
+              <div className="space-y-4">
+                <h3 className="font-medium flex items-center gap-2">
+                  <Bot className="h-4 w-4" />
+                  OpenAI (General Chat)
+                </h3>
+                {!isAIEnabled ? (
+                  <>
+                    <div>
+                      <label className="text-sm font-medium">OpenAI API Key:</label>
+                      <Input
+                        type="password"
+                        placeholder="sk-..."
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        className="mt-1"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Your API key is stored locally and never shared. Get yours from openai.com
+                      </p>
+                    </div>
+                    <Button onClick={handleSaveApiKey} className="w-full">
                       Enable AI
                     </Button>
-                    <Button variant="outline" onClick={() => setShowSettings(false)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    <p className="text-sm">✅ AI is enabled</p>
-                    <p className="text-xs text-muted-foreground">
-                      Queries used: {openAIService.getUsageCount()}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Estimated cost: ~${(openAIService.getUsageCount() * 0.0001).toFixed(4)}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="destructive" onClick={handleDisableAI} className="flex-1">
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <p className="text-sm text-green-600">✅ AI is enabled</p>
+                      <p className="text-xs text-muted-foreground">
+                        Queries used: {openAIService.getUsageCount()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Estimated cost: ~${(openAIService.getUsageCount() * 0.0001).toFixed(4)}
+                      </p>
+                    </div>
+                    <Button variant="destructive" onClick={handleDisableAI} className="w-full">
                       Disable AI
                     </Button>
-                    <Button variant="outline" onClick={() => setShowSettings(false)}>
-                      Close
+                  </>
+                )}
+              </div>
+
+              {/* Perplexity Settings */}
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="font-medium flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  Perplexity (Real-time Web Search)
+                </h3>
+                {!isPerplexityEnabled ? (
+                  <>
+                    <div>
+                      <label className="text-sm font-medium">Perplexity API Key:</label>
+                      <Input
+                        type="password"
+                        placeholder="pplx-..."
+                        value={perplexityApiKey}
+                        onChange={(e) => setPerplexityApiKey(e.target.value)}
+                        className="mt-1"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Enables real-time web search for service schedules, prices, and latest info. Get yours from perplexity.ai
+                      </p>
+                    </div>
+                    <Button onClick={handleSavePerplexityKey} className="w-full">
+                      Enable Web Search
                     </Button>
-                  </div>
-                </>
-              )}
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <p className="text-sm text-green-600">✅ Web search is enabled</p>
+                      <p className="text-xs text-muted-foreground">
+                        Search queries used: {perplexityService.getUsageCount()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Automatically searches for service schedules, prices, and official information
+                      </p>
+                    </div>
+                    <Button variant="destructive" onClick={handleDisablePerplexity} className="w-full">
+                      Disable Web Search
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setShowSettings(false)} className="flex-1">
+                  Close
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
