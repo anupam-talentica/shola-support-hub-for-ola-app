@@ -346,8 +346,22 @@ const Chat = () => {
       
       console.log('Starting response logic...');
       
-      // Check if query needs web search
-      if (isPerplexityEnabled && perplexityService.needsWebSearch(userMessage.text)) {
+      // PRIORITY 1: Check local knowledge base first
+      const localResponse = findBestResponse(userMessage.text);
+      const hasGoodLocalMatch = !localResponse.includes("Could you please be more specific");
+      
+      console.log('Local knowledge check:', {
+        query: userMessage.text,
+        hasGoodMatch: hasGoodLocalMatch,
+        response: localResponse.substring(0, 100) + '...'
+      });
+      
+      if (hasGoodLocalMatch) {
+        console.log('Using local knowledge base response');
+        botResponse = localResponse;
+      }
+      // PRIORITY 2: Web search for time-sensitive queries
+      else if (isPerplexityEnabled && perplexityService.needsWebSearch(userMessage.text)) {
         console.log('Using Perplexity web search...');
         setIsSearching(true);
         try {
@@ -358,19 +372,19 @@ const Chat = () => {
           console.log('Perplexity response received:', botResponse.substring(0, 100) + '...');
         } catch (error) {
           console.error('Perplexity error, falling back to OpenAI:', error);
-          // Fallback to OpenAI or pattern matching
+          // Fallback to OpenAI or local knowledge
           if (isAIEnabled) {
             try {
               botResponse = await openAIService.getResponse(userMessage.text);
               console.log('OpenAI fallback response:', botResponse.substring(0, 100) + '...');
             } catch (aiError) {
               console.error('OpenAI also failed:', aiError);
-              botResponse = findBestResponse(userMessage.text);
-              console.log('Pattern matching fallback response:', botResponse.substring(0, 100) + '...');
+              botResponse = localResponse;
+              console.log('Local knowledge fallback response:', botResponse.substring(0, 100) + '...');
             }
           } else {
-            botResponse = findBestResponse(userMessage.text);
-            console.log('Pattern matching response (no AI):', botResponse.substring(0, 100) + '...');
+            botResponse = localResponse;
+            console.log('Local knowledge response (no AI):', botResponse.substring(0, 100) + '...');
           }
           toast({
             title: "Web search unavailable",
@@ -380,27 +394,29 @@ const Chat = () => {
         } finally {
           setIsSearching(false);
         }
-      } else if (isAIEnabled) {
-        console.log('Using OpenAI...');
-        // Use OpenAI for general queries
+      }
+      // PRIORITY 3: AI for complex queries not in knowledge base
+      else if (isAIEnabled) {
+        console.log('Using OpenAI for complex query...');
         try {
           botResponse = await openAIService.getResponse(userMessage.text);
           console.log('OpenAI response:', botResponse.substring(0, 100) + '...');
         } catch (error) {
-          console.error('OpenAI error, falling back to pattern matching:', error);
-          botResponse = findBestResponse(userMessage.text);
-          console.log('Pattern matching fallback:', botResponse.substring(0, 100) + '...');
+          console.error('OpenAI error, falling back to local knowledge:', error);
+          botResponse = localResponse;
+          console.log('Local knowledge fallback:', botResponse.substring(0, 100) + '...');
           toast({
             title: "AI temporarily unavailable",
             description: "Switched to basic responses. Check your API key.",
             variant: "destructive"
           });
         }
-      } else {
-        console.log('Using pattern matching (no AI services enabled)...');
-        // Use pattern matching
-        botResponse = findBestResponse(userMessage.text);
-        console.log('Pattern matching response:', botResponse.substring(0, 100) + '...');
+      } 
+      // PRIORITY 4: Local knowledge as final fallback
+      else {
+        console.log('Using local knowledge (no AI services enabled)...');
+        botResponse = localResponse;
+        console.log('Local knowledge response:', botResponse.substring(0, 100) + '...');
       }
 
       console.log('Creating bot message...');
