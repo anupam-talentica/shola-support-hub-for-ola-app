@@ -21,7 +21,18 @@ const scooterKnowledge = {
       "For optimal battery performance, charge your electric scooter after each ride. Full charge typically takes 4-6 hours.",
       "Most electric scooters have a range of 15-25 km per charge, depending on terrain and rider weight.",
       "If your battery drains quickly, avoid overcharging and store in moderate temperatures (15-25°C).",
-      "Red battery indicator means charge immediately. Avoid completely draining the battery."
+      "Red battery indicator means charge immediately. Avoid completely draining the battery.",
+      "Battery lifespan: 2-3 years or 50,000-70,000 km. Replacement cost varies from ₹15,000-₹35,000 depending on your scooter model."
+    ]
+  },
+  service: {
+    keywords: ["service", "maintenance", "km", "schedule", "check", "inspection", "repair", "servicing", "service center", "ola service", "ather service", "tvs service", "bajaj service"],
+    responses: [
+      "📅 **OLA S1/S1 Pro Service Schedule:**\n• First service: 500 km\n• Regular service: Every 1000 km\n• Battery check: Every 6 months\n• Book via OLA app or visit nearest service center",
+      "📅 **Ather 450X Service Schedule:**\n• First service: 1000 km\n• Regular service: Every 1500 km\n• Battery health check: Every 6 months\n• AtherSpace centers in major cities",
+      "📅 **TVS iQube Service Schedule:**\n• First service: 500 km\n• Regular service: Every 1000 km\n• Available at TVS dealerships nationwide",
+      "📅 **Bajaj Chetak Service Schedule:**\n• First service: 1000 km\n• Regular service: Every 1200 km\n• Service at authorized Bajaj dealerships",
+      "🔧 **General Service Checklist:**\n• Battery health check\n• Brake inspection\n• Tire pressure check\n• Motor diagnostics\n• Software updates\n• Cleaning and lubrication"
     ]
   },
   rides: {
@@ -728,17 +739,47 @@ const Chat = () => {
       {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-lg">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <CardTitle>AI & Web Search Settings</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Configure your AI services for better responses
+              </p>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Service Status Overview */}
+              <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                <h4 className="font-medium text-sm">Service Status</h4>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Basic Pattern Matching</span>
+                    <Badge variant="secondary" className="text-xs">Always Active</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">OpenAI Chat (General AI)</span>
+                    <Badge variant={isAIEnabled ? "default" : "outline"} className="text-xs">
+                      {isAIEnabled ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Web Search (Live Data)</span>
+                    <Badge variant={isPerplexityEnabled ? "default" : "outline"} className="text-xs">
+                      {isPerplexityEnabled ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
               {/* OpenAI Settings */}
               <div className="space-y-4">
-                <h3 className="font-medium flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <Bot className="h-4 w-4" />
-                  OpenAI (General Chat)
-                </h3>
+                  <h3 className="font-medium">OpenAI (General Chat)</h3>
+                  {isAIEnabled && <Badge variant="secondary" className="text-xs">Active</Badge>}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Enables AI-powered responses for general queries. Without this, only basic pattern matching is used.
+                </p>
                 {!isAIEnabled ? (
                   <>
                     <div>
@@ -751,26 +792,25 @@ const Chat = () => {
                         className="mt-1"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        Your API key is stored locally and never shared. Get yours from openai.com
+                        Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" className="text-primary hover:underline">openai.com</a>. 
+                        Keys are stored locally and never shared.
                       </p>
                     </div>
                     <Button onClick={handleSaveApiKey} className="w-full">
-                      Enable AI
+                      Enable OpenAI Chat
                     </Button>
                   </>
                 ) : (
                   <>
-                    <div className="space-y-2">
-                      <p className="text-sm text-green-600">✅ AI is enabled</p>
-                      <p className="text-xs text-muted-foreground">
-                        Queries used: {openAIService.getUsageCount()}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Estimated cost: ~${(openAIService.getUsageCount() * 0.0001).toFixed(4)}
-                      </p>
+                    <div className="space-y-2 bg-green-50 dark:bg-green-950/20 rounded-lg p-3">
+                      <p className="text-sm text-green-700 dark:text-green-400 font-medium">✅ OpenAI is enabled</p>
+                      <div className="text-xs text-green-600 dark:text-green-500 space-y-1">
+                        <p>Queries used: {openAIService.getUsageCount()}</p>
+                        <p>Estimated cost: ~${(openAIService.getUsageCount() * 0.0001).toFixed(4)}</p>
+                      </div>
                     </div>
                     <Button variant="destructive" onClick={handleDisableAI} className="w-full">
-                      Disable AI
+                      Disable OpenAI
                     </Button>
                   </>
                 )}
@@ -778,10 +818,17 @@ const Chat = () => {
 
               {/* Perplexity Settings */}
               <div className="space-y-4 border-t pt-4">
-                <h3 className="font-medium flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <Globe className="h-4 w-4" />
-                  Perplexity (Real-time Web Search)
-                </h3>
+                  <h3 className="font-medium">Perplexity (Real-time Web Search)</h3>
+                  {isPerplexityEnabled && <Badge variant="secondary" className="text-xs">Active</Badge>}
+                </div>
+                <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3">
+                  <p className="text-sm text-blue-700 dark:text-blue-400 font-medium">🚀 Recommended for service queries</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">
+                    Enables real-time search for OLA/Ather/TVS service schedules, pricing, and official updates
+                  </p>
+                </div>
                 {!isPerplexityEnabled ? (
                   <>
                     <div>
@@ -794,29 +841,39 @@ const Chat = () => {
                         className="mt-1"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        Enables real-time web search for service schedules, prices, and latest info. Get yours from perplexity.ai
+                        Get your API key from <a href="https://www.perplexity.ai/settings/api" target="_blank" className="text-primary hover:underline">perplexity.ai</a>. 
+                        Start with $5 free credit.
                       </p>
                     </div>
-                    <Button onClick={handleSavePerplexityKey} className="w-full">
+                    <Button onClick={handleSavePerplexityKey} className="w-full bg-blue-600 hover:bg-blue-700">
                       Enable Web Search
                     </Button>
                   </>
                 ) : (
                   <>
-                    <div className="space-y-2">
-                      <p className="text-sm text-green-600">✅ Web search is enabled</p>
-                      <p className="text-xs text-muted-foreground">
-                        Search queries used: {perplexityService.getUsageCount()}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Automatically searches for service schedules, prices, and official information
-                      </p>
+                    <div className="space-y-2 bg-green-50 dark:bg-green-950/20 rounded-lg p-3">
+                      <p className="text-sm text-green-700 dark:text-green-400 font-medium">✅ Web search is enabled</p>
+                      <div className="text-xs text-green-600 dark:text-green-500 space-y-1">
+                        <p>Search queries used: {perplexityService.getUsageCount()}</p>
+                        <p>Automatically searches for: service schedules, pricing, official updates</p>
+                      </div>
                     </div>
                     <Button variant="destructive" onClick={handleDisablePerplexity} className="w-full">
                       Disable Web Search
                     </Button>
                   </>
                 )}
+              </div>
+
+              {/* Quick Setup Guide */}
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3 border-t pt-4">
+                <h4 className="font-medium text-sm">Quick Setup Guide</h4>
+                <div className="text-xs text-muted-foreground space-y-2">
+                  <p><strong>For best results:</strong></p>
+                  <p>1. Enable Perplexity for live scooter service data</p>
+                  <p>2. Enable OpenAI for general conversation support</p>
+                  <p>3. Basic responses work without any API keys</p>
+                </div>
               </div>
 
               <div className="flex gap-2 pt-4 border-t">
