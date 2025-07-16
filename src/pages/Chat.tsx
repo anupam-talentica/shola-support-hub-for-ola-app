@@ -7,10 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { openAIService } from "@/services/openai";
-import { ticketService } from "@/services/ticketService";
-import { userService } from "@/services/userService";
-import type { SupportTicket } from "@/types/ticket";
+import { openAIService } from '../services/openai';
+import { ticketService } from '../services/ticketService';
+import { userService } from '../services/userService';
+import type { SupportTicket } from '../types/ticket';
 
 // Electric Scooter Knowledge Base
 const scooterKnowledge = {
@@ -123,7 +123,14 @@ const Chat = () => {
 
   // Load chat history and API key from localStorage
   useEffect(() => {
-    const savedMessages = localStorage.getItem('chatHistory');
+    const currentUser = userService.getCurrentUser();
+    if (!currentUser) {
+      console.error('No authenticated user found');
+      return;
+    }
+
+    const userChatKey = `chatHistory_${currentUser.phone}`;
+    const savedMessages = localStorage.getItem(userChatKey);
     if (savedMessages) {
       const parsed = JSON.parse(savedMessages);
       setMessages(parsed.map((msg: any) => ({
@@ -158,7 +165,11 @@ const Chat = () => {
   // Save messages to localStorage
   useEffect(() => {
     if (messages.length > 0) {
-      localStorage.setItem('chatHistory', JSON.stringify(messages));
+      const currentUser = userService.getCurrentUser();
+      if (currentUser) {
+        const userChatKey = `chatHistory_${currentUser.phone}`;
+        localStorage.setItem(userChatKey, JSON.stringify(messages));
+      }
     }
   }, [messages]);
 
