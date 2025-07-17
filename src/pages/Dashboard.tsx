@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ticketService } from "@/services/ticketService";
 import { userService } from "@/services/userService";
 import type { SupportTicket } from "@/types/ticket";
+import { Order, ORDER_STATUS_LABELS } from "@/types/order";
+import { orderService } from "@/services/orderService";
 import { 
   Phone, 
   LogOut, 
@@ -19,7 +21,9 @@ import {
   AlertTriangle,
   CheckCircle,
   Filter,
-  Ticket
+  Ticket,
+  Package,
+  BookOpen
 } from "lucide-react";
 
 const Dashboard = () => {
@@ -30,6 +34,8 @@ const Dashboard = () => {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [ticketFilter, setTicketFilter] = useState<'all' | 'open' | 'in-progress' | 'resolved'>('all');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [orderFilter, setOrderFilter] = useState<Order['status'] | 'all'>('all');
 
   useEffect(() => {
     const user = userService.getCurrentUser();
@@ -40,6 +46,7 @@ const Dashboard = () => {
       setIsAdmin(user.role === 'admin');
       // Load tickets based on user role
       loadTickets();
+      loadOrders();
     } else {
       navigate('/');
     }
@@ -50,6 +57,19 @@ const Dashboard = () => {
     if (user) {
       const userTickets = ticketService.getTicketsForUser(user.phone, user.role === 'admin');
       setTickets(userTickets);
+    }
+  };
+
+  const loadOrders = () => {
+    const user = userService.getCurrentUser();
+    if (user) {
+      if (user.role === 'admin') {
+        const allOrders = orderService.getAllOrders();
+        setOrders(allOrders);
+      } else {
+        const userOrders = orderService.getOrdersByPhone(user.phone);
+        setOrders(userOrders);
+      }
     }
   };
 
@@ -101,6 +121,12 @@ const Dashboard = () => {
 
   const recentTickets = filteredTickets.slice(0, 5);
 
+  const filteredOrders = orderFilter === 'all'
+    ? orders
+    : orders.filter(order => order.status === orderFilter);
+
+  const recentOrders = filteredOrders.slice(0, 5);
+
   const handleStatusChange = (ticketId: string, newStatus: SupportTicket['status']) => {
     ticketService.updateTicketStatus(ticketId, newStatus);
     loadTickets();
@@ -108,6 +134,17 @@ const Dashboard = () => {
       title: "Ticket updated",
       description: `Status changed to ${newStatus}`
     });
+  };
+
+  const handleOrderStatusChange = (orderId: string, newStatus: Order['status']) => {
+    const success = orderService.updateOrderStatus(orderId, newStatus);
+    if (success) {
+      loadOrders();
+      toast({
+        title: "Order updated",
+        description: `Status changed to ${ORDER_STATUS_LABELS[newStatus]}`
+      });
+    }
   };
 
   const getStatusBadge = (status: SupportTicket['status']) => {
@@ -143,6 +180,24 @@ const Dashboard = () => {
     }
   };
 
+  const getOrderStatusBadge = (status: Order['status']) => {
+    const statusConfig = {
+      pending: { variant: 'secondary' as const, color: 'bg-yellow-100 text-yellow-800' },
+      confirmed: { variant: 'default' as const, color: 'bg-blue-100 text-blue-800' },
+      shipped: { variant: 'default' as const, color: 'bg-purple-100 text-purple-800' },
+      out_for_delivery: { variant: 'default' as const, color: 'bg-orange-100 text-orange-800' },
+      delivered: { variant: 'default' as const, color: 'bg-green-100 text-green-800' },
+      cancelled: { variant: 'destructive' as const, color: 'bg-red-100 text-red-800' },
+    };
+
+    const config = statusConfig[status];
+    return (
+      <Badge variant={config.variant} className={config.color}>
+        {ORDER_STATUS_LABELS[status]}
+      </Badge>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -164,7 +219,7 @@ const Dashboard = () => {
                   <Ticket className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/admin/knowledge')}>
-                  <Settings className="h-4 w-4" />
+                  <BookOpen className="h-4 w-4" />
                 </Button>
               </>
             )}
@@ -317,6 +372,134 @@ const Dashboard = () => {
                     onClick={() => navigate('/chat')}
                   >
                     Start a conversation to create tickets
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Orders Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              {isAdmin ? `All Orders (${orders.length})` : `My Orders (${orders.length})`}
+            </CardTitle>
+            <div className="flex gap-2 mt-2">
+              <Button
+                variant={orderFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setOrderFilter('all')}
+              >
+                All
+              </Button>
+              <Button
+                variant={orderFilter === 'pending' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setOrderFilter('pending')}
+              >
+                Pending
+              </Button>
+              <Button
+                variant={orderFilter === 'shipped' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setOrderFilter('shipped')}
+              >
+                Shipped
+              </Button>
+              <Button
+                variant={orderFilter === 'delivered' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setOrderFilter('delivered')}
+              >
+                Delivered
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {recentOrders.map((order) => (
+                <div key={order.id} className="border rounded-lg p-4 space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Package className="h-4 w-4" />
+                        <p className="font-medium">{order.id}</p>
+                        <span className="text-sm text-muted-foreground">
+                          ${order.orderTotal}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium">{order.scooterModel}</p>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        {isAdmin ? `Customer: ${order.customerName} (${order.customerPhone})` : order.shippingAddress}
+                      </p>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>Order: {order.orderDate}</span>
+                        <span>Expected: {order.estimatedDelivery}</span>
+                        {order.trackingNumber && (
+                          <span>Tracking: {order.trackingNumber}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right space-y-2">
+                      {getOrderStatusBadge(order.status)}
+                      {isAdmin && (
+                        <div className="flex gap-1">
+                          {order.status === 'pending' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOrderStatusChange(order.id, 'confirmed')}
+                            >
+                              Confirm
+                            </Button>
+                          )}
+                          {order.status === 'confirmed' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOrderStatusChange(order.id, 'shipped')}
+                            >
+                              Ship
+                            </Button>
+                          )}
+                          {order.status === 'shipped' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOrderStatusChange(order.id, 'out_for_delivery')}
+                            >
+                              Out for Delivery
+                            </Button>
+                          )}
+                          {order.status === 'out_for_delivery' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOrderStatusChange(order.id, 'delivered')}
+                            >
+                              Mark Delivered
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {recentOrders.length === 0 && (
+                <div className="text-center py-8">
+                  <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-muted-foreground">
+                    {orderFilter === 'all' ? 'No orders yet' : `No ${orderFilter} orders`}
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    className="mt-2"
+                    onClick={() => navigate('/chat')}
+                  >
+                    Ask about order status in chat
                   </Button>
                 </div>
               )}

@@ -12,6 +12,8 @@ import { perplexityService } from '../services/perplexityService';
 import { ticketService } from '../services/ticketService';
 import { userService } from '../services/userService';
 import type { SupportTicket } from '../types/ticket';
+import { orderService } from '@/services/orderService';
+import { Order } from '@/types/order';
 
 // Default Electric Scooter Knowledge Base
 const DEFAULT_SCOOTER_KNOWLEDGE = {
@@ -295,6 +297,58 @@ const Chat = () => {
     return dissatisfactionKeywords.some(keyword => lowerMessage.includes(keyword));
   };
 
+  // Check if user is asking about order status
+  const checkOrderInquiry = (message: string): { isOrderInquiry: boolean; orderId?: string; phone?: string } => {
+    const orderKeywords = ['order', 'delivery', 'tracking', 'shipment', 'status'];
+    const isOrderInquiry = orderKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword)
+    );
+
+    // Extract order ID (format: ORD-XXX)
+    const orderIdMatch = message.match(/ORD-\d+/i);
+    const orderId = orderIdMatch ? orderIdMatch[0].toUpperCase() : undefined;
+
+    // Extract phone number
+    const phoneMatch = message.match(/\+?\d{10,}/);
+    const phone = phoneMatch ? phoneMatch[0] : undefined;
+
+    return { isOrderInquiry, orderId, phone };
+  };
+
+  // Handle order inquiries
+  const handleOrderInquiry = (message: string): string | null => {
+    const { isOrderInquiry, orderId, phone } = checkOrderInquiry(message);
+    
+    if (!isOrderInquiry) return null;
+
+    if (orderId) {
+      const order = orderService.getOrderById(orderId);
+      if (order) {
+        return orderService.getOrderStatusMessage(order);
+      } else {
+        return `I couldn't find an order with ID ${orderId}. Please check the order ID and try again, or provide your phone number to look up your orders.`;
+      }
+    }
+
+    if (phone) {
+      const orders = orderService.getOrdersByPhone(phone);
+      if (orders.length > 0) {
+        if (orders.length === 1) {
+          return orderService.getOrderStatusMessage(orders[0]);
+        } else {
+          const orderList = orders.map(order => 
+            `• Order ${order.id}: ${order.scooterModel} - Status: ${order.status}`
+          ).join('\n');
+          return `I found ${orders.length} orders for your phone number:\n\n${orderList}\n\nWould you like details about a specific order?`;
+        }
+      } else {
+        return `I couldn't find any orders associated with phone number ${phone}. Please verify the number or contact our support team for assistance.`;
+      }
+    }
+
+    return "To check your order status, please provide either your order ID (e.g., ORD-001) or your phone number.";
+  };
+
   // Smart pattern matching function with brand detection
   const findBestResponse = (userMessage: string): string => {
     const lowerMessage = userMessage.toLowerCase();
@@ -397,8 +451,14 @@ const Chat = () => {
       let isWebSearch = false;
       
       console.log('Starting response logic with ChatGPT 4.0 priority...');
-      
-      // Build conversation history for enhanced responses
+
+      // Check for order inquiries first
+      const orderResponse = handleOrderInquiry(userMessage.text);
+      if (orderResponse) {
+        botResponse = orderResponse;
+      } else {
+        
+        // Build conversation history for enhanced responses
       const conversationHistory = messages.slice(-6).map(msg => ({
         role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
         content: msg.text
@@ -503,6 +563,7 @@ const Chat = () => {
       console.log('Adding bot message to state...');
       setMessages(prev => [...prev, botMessage]);
       console.log('Bot message added successfully');
+      }
     } catch (error) {
       console.error('Error generating response:', error);
       const errorMessage: Message = {
