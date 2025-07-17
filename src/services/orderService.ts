@@ -4,7 +4,7 @@ import { Order } from '@/types/order';
 const MOCK_ORDERS: Order[] = [
   {
     id: 'ORD-001',
-    customerPhone: '+1234567890',
+    customerPhone: '1234567890',
     customerName: 'John Doe',
     customerEmail: 'john.doe@example.com',
     scooterModel: 'EcoRide Pro 2024',
@@ -18,7 +18,7 @@ const MOCK_ORDERS: Order[] = [
   },
   {
     id: 'ORD-002',
-    customerPhone: '+1234567891',
+    customerPhone: '1234567891',
     customerName: 'Jane Smith',
     customerEmail: 'jane.smith@example.com',
     scooterModel: 'EcoRide Lite 2024',
@@ -32,7 +32,7 @@ const MOCK_ORDERS: Order[] = [
   },
   {
     id: 'ORD-003',
-    customerPhone: '+1234567892',
+    customerPhone: '1234567892',
     customerName: 'Mike Johnson',
     customerEmail: 'mike.johnson@example.com',
     scooterModel: 'EcoRide Max 2024',
@@ -46,7 +46,7 @@ const MOCK_ORDERS: Order[] = [
   },
   {
     id: 'ORD-004',
-    customerPhone: '+1234567893',
+    customerPhone: '1234567893',
     customerName: 'Sarah Wilson',
     customerEmail: 'sarah.wilson@example.com',
     scooterModel: 'EcoRide Pro 2024',
@@ -59,7 +59,7 @@ const MOCK_ORDERS: Order[] = [
   },
   {
     id: 'ORD-005',
-    customerPhone: '+1234567894',
+    customerPhone: '1234567894',
     customerName: 'Tom Brown',
     customerEmail: 'tom.brown@example.com',
     scooterModel: 'EcoRide Lite 2024',
