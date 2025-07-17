@@ -178,7 +178,7 @@ const Chat = () => {
     if (!savedMessages) {
       const welcomeMessage: Message = {
         id: Date.now().toString(),
-        text: `Hello! I'm your Electric Scooter Support Assistant${savedApiKey ? ' powered by AI' : ''}. I can help you with battery issues, ride problems, payments, maintenance, safety guidelines, and account management. How can I assist you today?`,
+        text: `Hello! I'm your Electric Scooter Support Assistant powered by ChatGPT 4.0${savedApiKey ? ' (AI + Web Search Enabled)' : ' (Setup Required)'}. I can help you with battery issues, ride problems, payments, maintenance, safety guidelines, current pricing, and account management. How can I assist you today?`,
         sender: 'bot',
         timestamp: new Date()
       };
@@ -369,25 +369,61 @@ const Chat = () => {
       let sources: string[] | undefined;
       let isWebSearch = false;
       
-      console.log('Starting response logic...');
+      console.log('Starting response logic with ChatGPT 4.0 priority...');
       
-      // PRIORITY 1: Check local knowledge base first
-      const localResponse = findBestResponse(userMessage.text);
-      const hasGoodLocalMatch = !localResponse.includes("Could you please be more specific");
+      // Build conversation history for enhanced responses
+      const conversationHistory = messages.slice(-6).map(msg => ({
+        role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
+        content: msg.text
+      }));
       
-      console.log('Local knowledge check:', {
-        query: userMessage.text,
-        hasGoodMatch: hasGoodLocalMatch,
-        response: localResponse.substring(0, 100) + '...'
-      });
-      
-      if (hasGoodLocalMatch) {
-        console.log('Using local knowledge base response');
-        botResponse = localResponse;
-      }
-      // PRIORITY 2: Web search for time-sensitive queries
+      // PRIORITY 1: ChatGPT 4.0 for ALL queries (when available)
+      if (isAIEnabled) {
+        console.log('Using ChatGPT 4.0 for primary response...');
+        
+        // Check if query needs web search (time-sensitive information)
+        if (openAIService.needsWebSearch(userMessage.text)) {
+          console.log('Query needs web search, using ChatGPT 4.0 web search mode...');
+          setIsSearching(true);
+          try {
+            const webResult = await openAIService.getWebSearchResponse(userMessage.text);
+            botResponse = webResult.response;
+            sources = webResult.sources;
+            isWebSearch = true;
+            console.log('ChatGPT 4.0 web search response:', botResponse.substring(0, 100) + '...');
+          } catch (error) {
+            console.error('ChatGPT 4.0 web search error, trying regular response:', error);
+            try {
+              botResponse = await openAIService.getEnhancedResponse(userMessage.text, conversationHistory);
+              console.log('ChatGPT 4.0 regular response fallback:', botResponse.substring(0, 100) + '...');
+            } catch (regularError) {
+              console.error('ChatGPT 4.0 regular response also failed:', regularError);
+              botResponse = findBestResponse(userMessage.text);
+              console.log('Local knowledge fallback:', botResponse.substring(0, 100) + '...');
+            }
+          } finally {
+            setIsSearching(false);
+          }
+        } else {
+          // Regular ChatGPT 4.0 response for non-web-search queries
+          try {
+            botResponse = await openAIService.getEnhancedResponse(userMessage.text, conversationHistory);
+            console.log('ChatGPT 4.0 regular response:', botResponse.substring(0, 100) + '...');
+          } catch (error) {
+            console.error('ChatGPT 4.0 error, using local knowledge fallback:', error);
+            botResponse = findBestResponse(userMessage.text);
+            console.log('Local knowledge fallback:', botResponse.substring(0, 100) + '...');
+            toast({
+              title: "ChatGPT 4.0 temporarily unavailable",
+              description: "Using fallback responses. Check your API key or try again.",
+              variant: "destructive"
+            });
+          }
+        }
+      } 
+      // PRIORITY 2: Web search for time-sensitive queries (when GPT-4.0 not available)
       else if (isPerplexityEnabled && perplexityService.needsWebSearch(userMessage.text)) {
-        console.log('Using Perplexity web search...');
+        console.log('ChatGPT 4.0 not available, using Perplexity web search...');
         setIsSearching(true);
         try {
           const webResult = await perplexityService.searchWeb(userMessage.text);
@@ -396,21 +432,9 @@ const Chat = () => {
           isWebSearch = true;
           console.log('Perplexity response received:', botResponse.substring(0, 100) + '...');
         } catch (error) {
-          console.error('Perplexity error, falling back to OpenAI:', error);
-          // Fallback to OpenAI or local knowledge
-          if (isAIEnabled) {
-            try {
-              botResponse = await openAIService.getResponse(userMessage.text);
-              console.log('OpenAI fallback response:', botResponse.substring(0, 100) + '...');
-            } catch (aiError) {
-              console.error('OpenAI also failed:', aiError);
-              botResponse = localResponse;
-              console.log('Local knowledge fallback response:', botResponse.substring(0, 100) + '...');
-            }
-          } else {
-            botResponse = localResponse;
-            console.log('Local knowledge response (no AI):', botResponse.substring(0, 100) + '...');
-          }
+          console.error('Perplexity error, falling back to local knowledge:', error);
+          botResponse = findBestResponse(userMessage.text);
+          console.log('Local knowledge fallback response:', botResponse.substring(0, 100) + '...');
           toast({
             title: "Web search unavailable",
             description: "Using cached responses. Check your Perplexity API key.",
@@ -420,28 +444,15 @@ const Chat = () => {
           setIsSearching(false);
         }
       }
-      // PRIORITY 3: AI for complex queries not in knowledge base
-      else if (isAIEnabled) {
-        console.log('Using OpenAI for complex query...');
-        try {
-          botResponse = await openAIService.getResponse(userMessage.text);
-          console.log('OpenAI response:', botResponse.substring(0, 100) + '...');
-        } catch (error) {
-          console.error('OpenAI error, falling back to local knowledge:', error);
-          botResponse = localResponse;
-          console.log('Local knowledge fallback:', botResponse.substring(0, 100) + '...');
-          toast({
-            title: "AI temporarily unavailable",
-            description: "Switched to basic responses. Check your API key.",
-            variant: "destructive"
-          });
-        }
-      } 
-      // PRIORITY 4: Local knowledge as final fallback
+      // PRIORITY 3: Local knowledge as final fallback
       else {
-        console.log('Using local knowledge (no AI services enabled)...');
-        botResponse = localResponse;
+        console.log('Using local knowledge base (no AI services enabled)...');
+        botResponse = findBestResponse(userMessage.text);
         console.log('Local knowledge response:', botResponse.substring(0, 100) + '...');
+        
+        if (!isAIEnabled) {
+          botResponse += "\n\n💡 **Tip:** Enable ChatGPT 4.0 in Settings for intelligent responses with web search capabilities!";
+        }
       }
 
       console.log('Creating bot message...');
@@ -488,8 +499,8 @@ const Chat = () => {
     setShowSettings(false);
     
     toast({
-      title: "API Key Saved",
-      description: "AI responses are now enabled!",
+      title: "ChatGPT 4.0 Enabled",
+      description: "Intelligent responses with conversation memory and web search are now active!",
     });
   };
 
@@ -500,7 +511,7 @@ const Chat = () => {
     setShowSettings(false);
     
     toast({
-      title: "AI Disabled",
+      title: "ChatGPT 4.0 Disabled",
       description: "Switched to basic pattern matching responses",
     });
   };
@@ -614,7 +625,7 @@ const Chat = () => {
           <div>
             <h1 className="font-semibold">Electric Scooter Support</h1>
             <p className="text-sm text-muted-foreground">
-              {isAIEnabled ? `AI Assistant (${openAIService.getUsageCount()} queries)` : 'Basic Assistant'}
+              {isAIEnabled ? `ChatGPT 4.0 + Web Search (${openAIService.getUsageCount()} queries)` : 'Basic Assistant - Setup Required'}
             </p>
           </div>
         </div>
@@ -673,7 +684,7 @@ const Chat = () => {
                  )}
                  <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                    <span>{message.timestamp.toLocaleTimeString()}</span>
-                   {message.isWebSearch && <Badge variant="secondary" className="text-xs">Live Search</Badge>}
+                   {message.isWebSearch && <Badge variant="secondary" className="text-xs">ChatGPT 4.0 Web Search</Badge>}
                    {message.sender === 'bot' && (
                     <div className="flex gap-1 ml-2">
                       <Button
@@ -720,7 +731,7 @@ const Chat = () => {
                   <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
                   <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
                 </div>
-                {isSearching && <span className="text-xs text-muted-foreground">Searching the web...</span>}
+                {isSearching && <span className="text-xs text-muted-foreground">ChatGPT 4.0 searching for current information...</span>}
               </div>
             </div>
           </div>
@@ -758,7 +769,7 @@ const Chat = () => {
             <Paperclip className="h-4 w-4" />
           </Button>
           <Input
-            placeholder="Ask about battery, rides, payments, maintenance..."
+            placeholder="Ask about battery, rides, payments, maintenance, current prices..."
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -782,9 +793,9 @@ const Chat = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <CardHeader>
-              <CardTitle>AI & Web Search Settings</CardTitle>
+              <CardTitle>ChatGPT 4.0 & Web Search Settings</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Configure your AI services for better responses
+                Configure ChatGPT 4.0 and web search for intelligent responses
               </p>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -797,15 +808,15 @@ const Chat = () => {
                     <Badge variant="secondary" className="text-xs">Always Active</Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">OpenAI Chat (General AI)</span>
+                    <span className="text-sm">ChatGPT 4.0 (Primary AI)</span>
                     <Badge variant={isAIEnabled ? "default" : "outline"} className="text-xs">
                       {isAIEnabled ? "Active" : "Inactive"}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Web Search (Live Data)</span>
-                    <Badge variant={isPerplexityEnabled ? "default" : "outline"} className="text-xs">
-                      {isPerplexityEnabled ? "Active" : "Inactive"}
+                    <Badge variant={isAIEnabled ? "default" : "outline"} className="text-xs">
+                      {isAIEnabled ? "Active via OpenAI" : "Inactive"}
                     </Badge>
                   </div>
                 </div>
@@ -815,11 +826,17 @@ const Chat = () => {
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Bot className="h-4 w-4" />
-                  <h3 className="font-medium">OpenAI (General Chat)</h3>
+                  <h3 className="font-medium">ChatGPT 4.0 (Primary Assistant)</h3>
                   {isAIEnabled && <Badge variant="secondary" className="text-xs">Active</Badge>}
                 </div>
+                <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3">
+                  <p className="text-sm text-blue-700 dark:text-blue-400 font-medium">⚡ Recommended for all queries</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">
+                    ChatGPT 4.0 provides intelligent, context-aware responses with conversation memory AND web search
+                  </p>
+                </div>
                 <p className="text-sm text-muted-foreground">
-                  Enables AI-powered responses for general queries. Without this, only basic pattern matching is used.
+                  Uses ChatGPT 4.0 for ALL queries with conversation history. Automatically handles web search for time-sensitive information like pricing, service centers, and current offers.
                 </p>
                 {!isAIEnabled ? (
                   <>
@@ -838,20 +855,21 @@ const Chat = () => {
                       </p>
                     </div>
                     <Button onClick={handleSaveApiKey} className="w-full">
-                      Enable OpenAI Chat
+                      Enable ChatGPT 4.0
                     </Button>
                   </>
                 ) : (
                   <>
                     <div className="space-y-2 bg-green-50 dark:bg-green-950/20 rounded-lg p-3">
-                      <p className="text-sm text-green-700 dark:text-green-400 font-medium">✅ OpenAI is enabled</p>
+                      <p className="text-sm text-green-700 dark:text-green-400 font-medium">✅ ChatGPT 4.0 is enabled</p>
                       <div className="text-xs text-green-600 dark:text-green-500 space-y-1">
-                        <p>Queries used: {openAIService.getUsageCount()}</p>
+                        <p>Queries processed: {openAIService.getUsageCount()}</p>
                         <p>Estimated cost: ~${(openAIService.getUsageCount() * 0.0001).toFixed(4)}</p>
+                        <p>Features: Context awareness, conversation memory, web search</p>
                       </div>
                     </div>
                     <Button variant="destructive" onClick={handleDisableAI} className="w-full">
-                      Disable OpenAI
+                      Disable ChatGPT 4.0
                     </Button>
                   </>
                 )}
@@ -911,8 +929,8 @@ const Chat = () => {
                 <h4 className="font-medium text-sm">Quick Setup Guide</h4>
                 <div className="text-xs text-muted-foreground space-y-2">
                   <p><strong>For best results:</strong></p>
-                  <p>1. Enable Perplexity for live scooter service data</p>
-                  <p>2. Enable OpenAI for general conversation support</p>
+                  <p>1. Enable ChatGPT 4.0 for intelligent responses to ALL queries</p>
+                  <p>2. ChatGPT 4.0 automatically handles web search for live data</p>
                   <p>3. Basic responses work without any API keys</p>
                 </div>
               </div>
