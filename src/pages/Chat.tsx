@@ -271,6 +271,19 @@ const Chat = () => {
     setUserEmail("");
   };
 
+  // Check if user is expressing dissatisfaction
+  const checkUserDissatisfaction = (message: string): boolean => {
+    const dissatisfactionKeywords = [
+      'not satisfied', 'unsatisfied', 'not helpful', 'unhelpful', 'bad response',
+      'wrong answer', 'incorrect', 'not working', 'doesn\'t work', 'failed',
+      'frustrated', 'disappointed', 'support ticket', 'create ticket', 'file complaint',
+      'escalate', 'speak to human', 'customer service', 'not resolved', 'still having issue'
+    ];
+    
+    const lowerMessage = message.toLowerCase();
+    return dissatisfactionKeywords.some(keyword => lowerMessage.includes(keyword));
+  };
+
   // Smart pattern matching function with brand detection
   const findBestResponse = (userMessage: string): string => {
     const lowerMessage = userMessage.toLowerCase();
@@ -455,10 +468,18 @@ const Chat = () => {
         }
       }
 
+      // Check if user expressed dissatisfaction
+      const isDissatisfied = checkUserDissatisfaction(userMessage.text);
+      
+      let finalBotResponse = botResponse;
+      if (isDissatisfied) {
+        finalBotResponse += "\n\n🎫 **Not satisfied with this response?**\nI can help you create a support ticket for personalized assistance from our team. Would you like me to create a ticket for you?";
+      }
+
       console.log('Creating bot message...');
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: botResponse,
+        text: finalBotResponse,
         sender: 'bot',
         timestamp: new Date(),
         sources,
