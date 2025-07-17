@@ -2,6 +2,7 @@ import { Order } from '@/types/order';
 
 // Mock order data
 const MOCK_ORDERS: Order[] = [
+  // Customer 1234567890 orders
   {
     id: 'ORD-001',
     customerPhone: '1234567890',
@@ -17,6 +18,35 @@ const MOCK_ORDERS: Order[] = [
     paymentStatus: 'paid'
   },
   {
+    id: 'ORD-006',
+    customerPhone: '1234567890',
+    customerName: 'John Doe',
+    customerEmail: 'john.doe@example.com',
+    scooterModel: 'EcoRide Lite 2024',
+    orderDate: '2024-01-10',
+    status: 'delivered',
+    trackingNumber: 'TRK555666777',
+    estimatedDelivery: '2024-01-15',
+    shippingAddress: '123 Main St, New York, NY 10001',
+    orderTotal: 899.99,
+    paymentStatus: 'paid'
+  },
+  {
+    id: 'ORD-011',
+    customerPhone: '1234567890',
+    customerName: 'John Doe',
+    customerEmail: 'john.doe@example.com',
+    scooterModel: 'EcoRide Max 2024',
+    orderDate: '2024-01-22',
+    status: 'pending',
+    estimatedDelivery: '2024-01-30',
+    shippingAddress: '123 Main St, New York, NY 10001',
+    orderTotal: 1599.99,
+    paymentStatus: 'pending'
+  },
+
+  // Customer 1234567891 orders
+  {
     id: 'ORD-002',
     customerPhone: '1234567891',
     customerName: 'Jane Smith',
@@ -30,6 +60,35 @@ const MOCK_ORDERS: Order[] = [
     orderTotal: 899.99,
     paymentStatus: 'paid'
   },
+  {
+    id: 'ORD-007',
+    customerPhone: '1234567891',
+    customerName: 'Jane Smith',
+    customerEmail: 'jane.smith@example.com',
+    scooterModel: 'EcoRide Pro 2024',
+    orderDate: '2024-01-12',
+    status: 'delivered',
+    trackingNumber: 'TRK888999000',
+    estimatedDelivery: '2024-01-17',
+    shippingAddress: '456 Oak Ave, Los Angeles, CA 90210',
+    orderTotal: 1299.99,
+    paymentStatus: 'paid'
+  },
+  {
+    id: 'ORD-012',
+    customerPhone: '1234567891',
+    customerName: 'Jane Smith',
+    customerEmail: 'jane.smith@example.com',
+    scooterModel: 'EcoRide Max 2024',
+    orderDate: '2024-01-25',
+    status: 'confirmed',
+    estimatedDelivery: '2024-02-02',
+    shippingAddress: '456 Oak Ave, Los Angeles, CA 90210',
+    orderTotal: 1599.99,
+    paymentStatus: 'paid'
+  },
+
+  // Customer 1234567892 orders
   {
     id: 'ORD-003',
     customerPhone: '1234567892',
@@ -45,6 +104,35 @@ const MOCK_ORDERS: Order[] = [
     paymentStatus: 'paid'
   },
   {
+    id: 'ORD-008',
+    customerPhone: '1234567892',
+    customerName: 'Mike Johnson',
+    customerEmail: 'mike.johnson@example.com',
+    scooterModel: 'EcoRide Lite 2024',
+    orderDate: '2024-01-20',
+    status: 'shipped',
+    trackingNumber: 'TRK111222333',
+    estimatedDelivery: '2024-01-24',
+    shippingAddress: '789 Pine St, Chicago, IL 60601',
+    orderTotal: 899.99,
+    paymentStatus: 'paid'
+  },
+  {
+    id: 'ORD-013',
+    customerPhone: '1234567892',
+    customerName: 'Mike Johnson',
+    customerEmail: 'mike.johnson@example.com',
+    scooterModel: 'EcoRide Pro 2024',
+    orderDate: '2024-01-23',
+    status: 'cancelled',
+    estimatedDelivery: '2024-01-28',
+    shippingAddress: '789 Pine St, Chicago, IL 60601',
+    orderTotal: 1299.99,
+    paymentStatus: 'refunded'
+  },
+
+  // Customer 1234567893 orders
+  {
     id: 'ORD-004',
     customerPhone: '1234567893',
     customerName: 'Sarah Wilson',
@@ -58,6 +146,22 @@ const MOCK_ORDERS: Order[] = [
     paymentStatus: 'paid'
   },
   {
+    id: 'ORD-009',
+    customerPhone: '1234567893',
+    customerName: 'Sarah Wilson',
+    customerEmail: 'sarah.wilson@example.com',
+    scooterModel: 'EcoRide Lite 2024',
+    orderDate: '2024-01-14',
+    status: 'delivered',
+    trackingNumber: 'TRK444555666',
+    estimatedDelivery: '2024-01-19',
+    shippingAddress: '321 Elm St, Miami, FL 33101',
+    orderTotal: 899.99,
+    paymentStatus: 'paid'
+  },
+
+  // Customer 1234567894 orders
+  {
     id: 'ORD-005',
     customerPhone: '1234567894',
     customerName: 'Tom Brown',
@@ -69,6 +173,34 @@ const MOCK_ORDERS: Order[] = [
     shippingAddress: '654 Maple Dr, Seattle, WA 98101',
     orderTotal: 899.99,
     paymentStatus: 'pending'
+  },
+  {
+    id: 'ORD-010',
+    customerPhone: '1234567894',
+    customerName: 'Tom Brown',
+    customerEmail: 'tom.brown@example.com',
+    scooterModel: 'EcoRide Max 2024',
+    orderDate: '2024-01-17',
+    status: 'shipped',
+    trackingNumber: 'TRK777888999',
+    estimatedDelivery: '2024-01-22',
+    shippingAddress: '654 Maple Dr, Seattle, WA 98101',
+    orderTotal: 1599.99,
+    paymentStatus: 'paid'
+  },
+  {
+    id: 'ORD-014',
+    customerPhone: '1234567894',
+    customerName: 'Tom Brown',
+    customerEmail: 'tom.brown@example.com',
+    scooterModel: 'EcoRide Pro 2024',
+    orderDate: '2024-01-21',
+    status: 'out_for_delivery',
+    trackingNumber: 'TRK000111222',
+    estimatedDelivery: '2024-01-22',
+    shippingAddress: '654 Maple Dr, Seattle, WA 98101',
+    orderTotal: 1299.99,
+    paymentStatus: 'paid'
   }
 ];
 
