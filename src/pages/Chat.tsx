@@ -228,6 +228,16 @@ const Chat = () => {
     }
   };
 
+  const handleOpenHelpDeskTicket = () => {
+    setTicketFormData({
+      title: '',
+      description: '',
+      category: 'other',
+      priority: 'medium'
+    });
+    setShowTicketForm('help_desk_direct');
+  };
+
   const handleSubmitTicket = () => {
     if (!ticketFormData.title.trim() || !ticketFormData.description.trim()) {
       toast({
@@ -237,7 +247,7 @@ const Chat = () => {
       return;
     }
 
-    const messageForTicket = messages.find(m => m.id === showTicketForm);
+    const messageForTicket = showTicketForm === 'help_desk_direct' ? null : messages.find(m => m.id === showTicketForm);
     const user = userService.getCurrentUser();
     
     if (!user) {
@@ -861,8 +871,17 @@ const Chat = () => {
             variant="ghost"
             size="icon"
             onClick={() => fileInputRef.current?.click()}
+            title="Attach file"
           >
             <Paperclip className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenHelpDeskTicket}
+            title="Create help desk ticket"
+          >
+            <Ticket className="h-4 w-4" />
           </Button>
           <Input
             placeholder="Ask about battery, rides, payments, maintenance, current prices..."
@@ -1089,8 +1108,13 @@ const Chat = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Ticket className="h-5 w-5" />
-                Create Support Ticket
+                {showTicketForm === 'help_desk_direct' ? 'Create Help Desk Ticket' : 'Create Support Ticket'}
               </CardTitle>
+              {showTicketForm === 'help_desk_direct' && (
+                <p className="text-sm text-muted-foreground">
+                  Submit a ticket for technical support or general inquiries
+                </p>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
