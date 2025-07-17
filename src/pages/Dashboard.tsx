@@ -158,9 +158,16 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/admin/queries')}>
-              <Settings className="h-4 w-4" />
-            </Button>
+            {isAdmin && (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/admin/queries')}>
+                  <Ticket className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/admin/knowledge')}>
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </>
+            )}
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
             </Button>

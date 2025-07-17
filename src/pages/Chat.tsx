@@ -13,8 +13,8 @@ import { ticketService } from '../services/ticketService';
 import { userService } from '../services/userService';
 import type { SupportTicket } from '../types/ticket';
 
-// Electric Scooter Knowledge Base
-const scooterKnowledge = {
+// Default Electric Scooter Knowledge Base
+const DEFAULT_SCOOTER_KNOWLEDGE = {
   battery: {
     keywords: ["battery", "charge", "charging", "range", "power", "dead", "drain", "percentage"],
     responses: [
@@ -80,6 +80,17 @@ const scooterKnowledge = {
       "For account security, don't share your login credentials with others."
     ]
   }
+};
+
+// Function to get current knowledge base from localStorage or default
+const getScooterKnowledge = () => {
+  const savedKnowledge = localStorage.getItem('adminKnowledge');
+  if (savedKnowledge) {
+    return JSON.parse(savedKnowledge);
+  }
+  // Initialize localStorage with default knowledge
+  localStorage.setItem('adminKnowledge', JSON.stringify(DEFAULT_SCOOTER_KNOWLEDGE));
+  return DEFAULT_SCOOTER_KNOWLEDGE;
 };
 
 interface Message {
@@ -318,17 +329,20 @@ const Chat = () => {
       }
     }
 
-    // Find matching category and response
+    // Get current knowledge base and find matching category
+    const currentKnowledge = getScooterKnowledge();
     let bestMatch = { category: '', score: 0, responses: [] as string[] };
     
-    Object.entries(scooterKnowledge).forEach(([category, data]) => {
-      const matchingKeywords = data.keywords.filter(keyword => 
-        lowerMessage.includes(keyword)
-      );
-      
-      const score = matchingKeywords.length;
-      if (score > bestMatch.score) {
-        bestMatch = { category, score, responses: data.responses };
+    Object.entries(currentKnowledge).forEach(([category, data]) => {
+      if (data && typeof data === 'object' && 'keywords' in data && 'responses' in data) {
+        const matchingKeywords = (data.keywords as string[]).filter(keyword => 
+          lowerMessage.includes(keyword)
+        );
+        
+        const score = matchingKeywords.length;
+        if (score > bestMatch.score) {
+          bestMatch = { category, score, responses: data.responses as string[] };
+        }
       }
     });
 
