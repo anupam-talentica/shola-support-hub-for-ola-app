@@ -1,4 +1,4 @@
-# Shola Support Hub App
+# SHOLA- Support Hub for OLA 
 
 A comprehensive electric scooter support platform powered by ChatGPT 4.0 with intelligent chat assistance, ticket management, and admin dashboard capabilities.
 
