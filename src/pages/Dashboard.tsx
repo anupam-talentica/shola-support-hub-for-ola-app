@@ -39,15 +39,19 @@ const Dashboard = () => {
 
   useEffect(() => {
     const user = userService.getCurrentUser();
+    console.log('Dashboard - Current user:', user);
     
     if (user) {
       setIsAuthenticated(true);
       setUserPhone(user.phone);
       setIsAdmin(user.role === 'admin');
+      console.log('Dashboard - Is admin:', user.role === 'admin');
+      console.log('Dashboard - User role:', user.role);
       // Load tickets based on user role
       loadTickets();
       loadOrders();
     } else {
+      console.log('Dashboard - No user found, redirecting to login');
       navigate('/');
     }
   }, [navigate]);
